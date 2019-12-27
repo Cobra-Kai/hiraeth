@@ -1,41 +1,62 @@
-// Copyright (c) 2019 Jon Mayo <jon@rm-f.net>
-//
-// Permission to use, copy, modify, and distribute this software for any
-// purpose with or without fee is hereby granted, provided that the above
-// copyright notice and this permission notice appear in all copies.
-//
-// THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
-// WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
-// MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
-// ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
-// WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
-// ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
-// OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 package telnet
 
 import (
 	"log"
-
-	"github.com/Cobra-Kai/hiraeth/shell"
-
-	"github.com/reiver/go-telnet"
+	"net"
 )
 
-func Init(addr string) {
-	handler := shell.NewShellHandler()
-
-	log.Println("TELNET server listening on", addr)
-	err := telnet.ListenAndServe(addr, handler)
-	if nil != err {
-		panic(err)
-	}
+type Handler interface {
+	ServeTELNET(ts *TelnetStream)
 }
 
-func InitSsl(addr string) {
-	handler := shell.NewShellHandler()
+type HandlerFunc func() (int, HandlerFunc, error)
 
-	err := telnet.ListenAndServeTLS(addr, "cert.pem", "key.pem", handler)
-	if nil != err {
-		panic(err)
+type Server struct {
+	Addr    string
+	Handler Handler
+}
+
+func (server *Server) ListenAndServe() error {
+
+	// initialze a default handler
+	if server.Handler == nil {
+		server.Handler = NewEchoHandler()
 	}
+
+	var clients []net.Conn
+
+	taddr, err := net.ResolveTCPAddr("tcp", server.Addr)
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+
+	listener, err := net.ListenTCP("tcp", taddr)
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+
+	for {
+		conn, err := listener.AcceptTCP()
+		if err != nil {
+			log.Println(err)
+			continue // keep going despite this one error
+		}
+
+		ip, err := net.ResolveTCPAddr("tcp", conn.LocalAddr().String())
+		log.Println("Connection from", ip)
+
+		clients = append(clients, conn)
+
+		ts := NewTelnetStream(conn)
+		go server.Handler.ServeTELNET(ts)
+	}
+
+	return nil
+}
+
+func ListenAndServe(addr string, handler Handler) error {
+	server := &Server{Addr: addr, Handler: handler}
+	return server.ListenAndServe()
 }

@@ -21,7 +21,7 @@ import (
 	"runtime"
 
 	"github.com/Cobra-Kai/hiraeth/database"
-	"github.com/Cobra-Kai/hiraeth/telnet"
+	"github.com/Cobra-Kai/hiraeth/mudserver"
 	"github.com/Cobra-Kai/hiraeth/webserver"
 )
 
@@ -48,7 +48,7 @@ func main() {
 	go database.Init(*dbFilename)
 
 	go webserver.Init(*httpAddr)
-	go telnet.Init(*telnetAddr)
+	go mudserver.Init(*telnetAddr)
 
 	<-quit
 
